@@ -74,7 +74,7 @@ class Source:
                                     key_mapping, self.hbase_table_forecasting)
         if not data.empty:
             print("This forecast was already in the database")
-            return
+            return False
         else: 
             forecasted_data = self._collect_forecasting(latitude, longitude, now, tz_in_location)
             forecasted_data = forecasted_data.query("timestamp >= {}".format(now.astimezone(pytz.UTC).timestamp())).\
@@ -83,6 +83,7 @@ class Source:
                         self.config['hbase_weather_data'], [("info", "all")],
                         row_fields=["latitude", "longitude", "forecasting_timestamp", "timestamp"])
             print("{} new rows of forecast had been added to the database".format(forecasted_data.index.size))
+            return True
 
     def get_forecasting_data(self, latitude, longitude, date_from, date_to):
         """
