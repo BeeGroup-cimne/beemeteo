@@ -53,12 +53,24 @@ def collect_forecasting(source, conf, latitude, longitude):
         float(longitude),
     )
 
+def collect_raster(source, conf, lat_min, lat_max, lon_min, lon_max, day):
+    source_ = sources.get(source)(conf)
+    data = source_.collect_raster(
+        float(lat_min),
+        float(lat_max),
+        float(lon_min),
+        float(lon_max),
+        datetime.fromisoformat(day)
+    )
+
+
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     subprogram = ap.add_subparsers(help="The type of data to collect", dest="command", required=True)
     hist = subprogram.add_parser("historical", help="get historical data")
     fore = subprogram.add_parser("forecasting", help="get forecasting data")
     collect = subprogram.add_parser("collect_forecasting", help="collect forecasting data for now")
+    raster = subprogram.add_parser("collect_raster", help="collect raster data for now")
 
     # historical command
     hist.add_argument("-s", "--source", required=True,
@@ -84,6 +96,15 @@ if __name__ == "__main__":
     collect.add_argument("-c", "--config", help="The configuration file path", required=True)
     collect.add_argument("-lat", "--latitude", help="The latitude", required=True)
     collect.add_argument("-lon", "--longitude", required=True, help="The longitude")
+
+    raster.add_argument("-s", "--source", required=True,
+                      help="The source to get data from", choices=["MeteoGalicia"])
+    raster.add_argument("-c", "--config", help="The configuration file path", required=True)
+    raster.add_argument("-lon_min", "--longitude_min", required=True, help="The minimum longitude")
+    raster.add_argument("-lon_max", "--longitude_max", required=True, help="The maximum longitude")
+    raster.add_argument("-lat_min", "--latitude_min", required=True, help="The minimum latitude")
+    raster.add_argument("-lat_max", "--latitude_max", required=True, help="The maximum latitude")
+    raster.add_argument("-d", "--day", required=True, help="The day to get weather from (isoformat)")
     args = ap.parse_args()
 
     with open(args.config) as config_f:
@@ -95,3 +116,5 @@ if __name__ == "__main__":
         forecasting(args.source, config, args.latitude, args.longitude, args.date_from, args.date_to, args.file)
     elif args.command == "collect_forecasting":
         collect_forecasting(args.source, config, args.latitude, args.longitude)
+    elif args.command == "collect_raster":
+        collect_raster(args.source, config, args.latitude_min, args.latitude_max, args.longitude_min, args.longitude_max, args.day)

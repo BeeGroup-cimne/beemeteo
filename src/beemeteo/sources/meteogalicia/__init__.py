@@ -3,12 +3,12 @@ import datetime
 from io import StringIO
 
 import pandas as pd
+import xarray as xr
 import pytz
 import requests
 
 from beemeteo.sources import Source, logger
-from beemeteo.utils import _pandas_dt_to_ts_utc, _pandas_to_tz
-
+from beemeteo.utils import _pandas_dt_to_ts_utc, _pandas_to_tz, _datetime_to_tz, _datetime_dt_to_ts_utc
 
 class MeteoGalicia(Source):
     hbase_table_historical = "meteo_galicia_historical"
@@ -25,6 +25,48 @@ class MeteoGalicia(Source):
         forecasted_data['longitude'] = longitude
         forecasted_data['forecasting_timestamp'] = now_timestamp
         forecasted_data = forecasted_data.query("timestamp >= {}".format(now_timestamp))
+        return forecasted_data
+
+    def _prepare_forecasting_input(self, latitude, longitude, date_from, date_to, tz_in_location, **kwargs):
+        key_mapping = {"latitude": 0, "longitude": 1, "timestamp": 2, "forecasting_timestamp": 3}
+
+        latitude = format(latitude, '.1f')
+        longitude = format(longitude, '.1f')
+
+        date_from_local = _datetime_to_tz(date_from, tz_in_location)
+        date_to_local = _datetime_to_tz(date_to, tz_in_location)
+
+        g_ts_ini_utc = _datetime_dt_to_ts_utc(date_from_local)
+        g_ts_end_utc = _datetime_dt_to_ts_utc(date_to_local)
+
+        return latitude, longitude, g_ts_ini_utc, g_ts_end_utc, key_mapping
+
+    def _parse_forecasting_output(self, data, tz_in_location, **kwargs):
+        data = super()._parse_forecasting_output(data, tz_in_location, **kwargs)
+        if data.empty:
+            return data
+        if kwargs['forecasting_days'] == 0:
+            return data.groupby(["latitude", "longitude", "timestamp"]).last()
+
+    def _collect_raster(self, min_lat, max_lat, min_lon, max_lon, day):
+        # latitude = format((min_lat + max_lat)/2, '.3f')
+        # longitude = format((min_lon + max_lat)/2, '.3f')
+
+        # now_timestamp = int(now.astimezone(pytz.UTC).timestamp())
+        forecasted_data = self._get_historic_forecasting_raster(min_lat, max_lat, min_lon, max_lon, day)
+        forecasted_data = forecasted_data.drop(columns=["Lambert_Conformal", "windSpeed", "windDirection"])
+        # forecasted_data['latitude'] = (round(forecasted_data['latitude']*precision)).astype(int)/precision
+        # forecasted_data['longitude'] = (round(forecasted_data['longitude']*precision)).astype(int)/precision
+
+        forecasted_data['timestamp'] = forecasted_data['timestamp'].astype("datetime64[s]").astype(int)
+        forecasted_data['forecasting_timestamp'] = forecasted_data['forecasting_timestamp'].astype(
+            "datetime64[s]").astype(int)
+
+        # forecasted_data.rename({"ts": "timestamp"}, axis=1, inplace=True)
+        # forecasted_data["latitude"] = latitude
+        # forecasted_data['longitude'] = longitude
+        # forecasted_data['forecasting_timestamp'] = now_timestamp
+        # forecasted_data = forecasted_data.query("timestamp >= {}".format(now_timestamp))
         return forecasted_data
 
     def _get_historical_data_source(self, latitude, longitude, gaps, local_tz):
@@ -192,4 +234,88 @@ class MeteoGalicia(Source):
                     return solar_data
             except Exception as e:
                 logger.error(e)
+        return pd.DataFrame({})
+
+    def _get_historic_forecasting_raster(self, min_lat, max_lat, min_lon, max_lon, day):
+        """
+        Gets solar radiation information for a location on a given day
+
+        :param min_lat: station's latitude
+        :param max_lat: station's latitude
+        :param min_lon: station's longitude
+        :param max_lon: station's longitude
+        :param day: day to retrieve data
+        :return: all raw data for a given day
+        """
+
+        try:
+            url_mg = (
+                "http://mandeo.meteogalicia.es/"
+                "thredds/"
+                "ncss/"
+                "modelos/"
+                "WRF_ARW_1KM_HIST_Novo/"
+                "%s/"
+                "wrf_arw_det_history_d01_%s_0000.nc4?"
+                "var=lat&"
+                "var=lon&"
+                "var=dir&"
+                "var=mod&"
+                "var=prec&"
+                "var=rh&"
+                "var=swflx&"
+                "var=temp&"
+                "north=%s&"
+                "west=%s&"
+                "east=%s&"
+                "south=%s&"
+                "var=u&"
+                "var=v&"
+                "disableProjSubset=on&"
+                "horizStride=1&"
+                "time_start=%s&"
+                "time_end=%s&"
+                "timeStride=1&"
+                "timeStride=1&"
+                "accept=netcdf&"
+                % (
+                    datetime.datetime.strftime(day, "%Y%m%d"),
+                    datetime.datetime.strftime(day, "%Y%m%d"),
+                    max_lat,
+                    min_lon,
+                    max_lon,
+                    min_lat,
+                    datetime.datetime.strftime(day, "%Y-%m-%d"),
+                    datetime.datetime.strftime(day + datetime.timedelta(days=4), "%Y-%m-%d")
+                )
+            )
+
+            r = requests.get(url_mg)
+            with open("temp.nc4", "wb") as temp_file:
+                temp_file.write(r.content)
+
+            nc_data = xr.open_dataset('temp.nc4')
+            df = nc_data.to_dataframe()
+
+            names = {
+                "dir": "windSpeed",
+                "mod": "windDirection",
+                "prec": "totalPrecipitation",
+                "rh": "relativeHumidity",
+                "swflx": "GHI",
+                "temp": "airTemperature",
+                "time": "timestamp",
+                "lat": "latitude",
+                "lon": "longitude"
+            }
+
+            df = df.reset_index()
+            # df = df.set_index(['lat', 'lon'])
+            df.drop(['x', 'y'], axis=1, inplace=True)
+            df['forecasting_timestamp'] = day.replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=pytz.UTC)
+            df.rename(columns=names, inplace=True)
+
+            return df
+        except Exception as e:
+            logger.error(e)
         return pd.DataFrame({})
