@@ -13,6 +13,7 @@ from beemeteo.utils import _pandas_dt_to_ts_utc, _pandas_to_tz, _datetime_to_tz,
 class MeteoGalicia(Source):
     hbase_table_historical = "meteo_galicia_historical"
     hbase_table_forecasting = "meteo_galicia_forecasting"
+    hbase_table_grid = "meteo_galicia_grid"
 
     def __init__(self, config):
         super(MeteoGalicia, self).__init__(config)
@@ -62,12 +63,38 @@ class MeteoGalicia(Source):
         forecasted_data['forecasting_timestamp'] = forecasted_data['forecasting_timestamp'].astype(
             "datetime64[s]").astype(int)
 
-        # forecasted_data.rename({"ts": "timestamp"}, axis=1, inplace=True)
-        # forecasted_data["latitude"] = latitude
-        # forecasted_data['longitude'] = longitude
-        # forecasted_data['forecasting_timestamp'] = now_timestamp
-        # forecasted_data = forecasted_data.query("timestamp >= {}".format(now_timestamp))
-        return forecasted_data
+        precision = 10
+
+        forecasted_data['latitude'] = (round(forecasted_data['latitude'] * precision)).astype(int) / precision
+        forecasted_data['longitude'] = (round(forecasted_data['longitude'] * precision)).astype(int) / precision
+
+        dfs = {}
+
+        for i in range(0, len(forecasted_data), 96):
+            chunk = forecasted_data.iloc[i:i + 96].reset_index(drop=True)
+            lat = chunk.iloc[0]['latitude']
+            lon = chunk.iloc[0]['longitude']
+            if (lat, lon) not in dfs:
+                dfs[(lat, lon)] = [chunk]
+            else:
+                dfs[(lat, lon)].append(chunk)
+
+        cols_mean = ['totalPrecipitation', 'relativeHumidity', 'GHI', 'airTemperature', 'timestamp', 'latitude',
+                     'longitude', 'forecasting_timestamp']
+        cols_sum = ['u', 'v']
+
+        df_final = pd.DataFrame()
+
+        for lat_lon in dfs.keys():
+            df = pd.concat(dfs[lat_lon], axis=1)
+            mean_df = df[cols_mean].T.groupby(level=0).mean().T
+            sum_df = df[cols_sum].T.groupby(level=0).sum().T
+
+            result_df = pd.concat([mean_df, sum_df], axis=1)
+            result_df['forecasting_timestamp'] = result_df['forecasting_timestamp'].astype(int)
+            result_df['timestamp'] = result_df['timestamp'].astype(int)
+            df_final = pd.concat([df_final, result_df])
+        return df_final
 
     def _get_historical_data_source(self, latitude, longitude, gaps, local_tz):
         missing_data = pd.DataFrame()
@@ -312,7 +339,7 @@ class MeteoGalicia(Source):
             df = df.reset_index()
             # df = df.set_index(['lat', 'lon'])
             df.drop(['x', 'y'], axis=1, inplace=True)
-            df['forecasting_timestamp'] = day.replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=pytz.UTC)
+            df['forecasting_timestamp'] = day.replace(hour=0, minute=0, second=0, microsecond=0)
             df.rename(columns=names, inplace=True)
 
             return df
