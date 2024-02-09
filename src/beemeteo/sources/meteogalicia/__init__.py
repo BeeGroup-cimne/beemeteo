@@ -312,7 +312,7 @@ class MeteoGalicia(Source):
             df = df.reset_index()
             # df = df.set_index(['lat', 'lon'])
             df.drop(['x', 'y'], axis=1, inplace=True)
-            df['forecasting_timestamp'] = day
+            df['forecasting_timestamp'] = day.replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=pytz.UTC)
             df.rename(columns=names, inplace=True)
 
             return df
