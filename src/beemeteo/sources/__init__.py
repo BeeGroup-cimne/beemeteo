@@ -63,12 +63,27 @@ class Source:
         tz_in_location = pytz.timezone(tz_find.timezone_at(lat=float(latitude), lng=float(longitude)))
         now = pytz.UTC.localize(datetime.datetime.utcnow()).astimezone(tz_in_location)
         now = now.replace(minute=0, second=0, microsecond=0)
-        forecasted_data = self._collect_forecasting(latitude, longitude, now, tz_in_location)
-        forecasted_data = forecasted_data.query("timestamp >= {}".format(now.astimezone(pytz.UTC).timestamp())).\
-            sort_values(by=["forecasting_timestamp", "timestamp"])
-        save_to_hbase(forecasted_data.to_dict(orient="records"), self.hbase_table_forecasting,
-                      self.config['hbase_weather_data'], [("info", "all")],
-                      row_fields=["latitude", "longitude", "forecasting_timestamp", "timestamp"])
+
+        # verify if the data is already in db
+        key_mapping = {"latitude": 0, "longitude": 1, "ts": 2}
+        date_from_local = _datetime_to_tz(now, tz_in_location)
+        date_to_local = _datetime_to_tz(now+datetime.timedelta(minutes=2), tz_in_location)
+        g_ts_ini_utc = _datetime_dt_to_ts_utc(date_from_local)
+        g_ts_end_utc = _datetime_dt_to_ts_utc(date_to_local)
+        data = self._get_from_hbase(latitude, longitude, g_ts_ini_utc, g_ts_end_utc,
+                                    key_mapping, self.hbase_table_forecasting)
+        if not data.empty:
+            print("This forecast was already in the database")
+            return False
+        else: 
+            forecasted_data = self._collect_forecasting(latitude, longitude, now, tz_in_location)
+            forecasted_data = forecasted_data.query("timestamp >= {}".format(now.astimezone(pytz.UTC).timestamp())).\
+                sort_values(by=["forecasting_timestamp", "timestamp"])
+            save_to_hbase(forecasted_data.to_dict(orient="records"), self.hbase_table_forecasting,
+                        self.config['hbase_weather_data'], [("info", "all")],
+                        row_fields=["latitude", "longitude", "forecasting_timestamp", "timestamp"])
+            print("{} new rows of forecast had been added to the database".format(forecasted_data.index.size))
+            return True
 
     def get_forecasting_data(self, latitude, longitude, date_from, date_to):
         """
@@ -145,7 +160,7 @@ class Source:
                 gaps.append((data['ts2_py'].max().to_pydatetime(), min(date_to_local, now)))
             deltas = data['ts2_py'].diff()[1:]
             gaps_tmp = deltas[deltas > timedelta(hours=1)]
-            for i, _ in gaps_tmp.iteritems():
+            for i, _ in gaps_tmp.items():
                 gap_start = data['ts2_py'][i - 1]
                 gap_end = data['ts2_py'][i]
                 gaps.append((gap_start, gap_end))

@@ -48,7 +48,7 @@ def _datetime_dt_to_ts_utc(dt):
                datetime.timedelta(seconds=1))
 
 def _local_to_UTC(date, local_tz):
-    return date.replace(tzinfo=local_tz).astimezone(datetime.timezone.utc)
+    return pytz.utc.normalize(date)
 
 def _UTC_to_local(date, local_tz):
     return pytz.UTC.localize(date).astimezone(local_tz)

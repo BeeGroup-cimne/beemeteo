@@ -18,12 +18,13 @@ class AppleWeather(Source):
         self.api_key = self.config["apple_weather"]["token"]
 
     def _collect_forecasting(self, latitude, longitude, now, local_tz):
-        df = self._request_server(latitude, longitude, "currentWeather", now, now, local_tz)
-        df.rename(columns={'asOf': 'ts'}, inplace=True)
+        later = now + datetime.timedelta(days=3)
+        df = self._request_server(latitude, longitude, "forecastHourly", now, later, local_tz)
+        df.rename(columns={'forecastStart': 'ts'}, inplace=True)
         df = self._to_darksky_format(df, latitude, longitude)
         df["forecasting_timestamp"] = int(now.astimezone(pytz.UTC).timestamp())
         df.rename(columns={'ts': 'timestamp'}, inplace=True)
-        df.replace(df['timestamp'][0], int(datetime.datetime.timestamp(df['timestamp'][0])), inplace=True)
+        df['timestamp']= df['timestamp'].astype(int).div(10**9).astype(int)
         return df 
 
     def _get_historical_data_source(self, latitude, longitude, gaps, local_tz):
@@ -35,8 +36,7 @@ class AppleWeather(Source):
             df = pd.concat([df, data_period])
         df.rename(columns={'forecastStart': 'ts'}, inplace=True)
         df = self._to_darksky_format(df, latitude, longitude)
-        for element in df['ts']:
-            df.replace(element, int(datetime.datetime.timestamp(element)), inplace=True)
+        df['ts']= df['ts'].astype(int).div(10**9).astype(int)
         return df 
 
     def _request_server(self, lat, long, service, day_from, day_to, local_tz):
