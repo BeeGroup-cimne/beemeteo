@@ -61,6 +61,8 @@ class Source:
         return latitude, longitude, g_ts_ini_utc, g_ts_end_utc, key_mapping
 
     def _parse_forecasting_output(self, data, tz_in_location, **kwargs):
+        if data.empty:
+            return data
         data.forecasting_timestamp = _pandas_ts_to_dt(data.forecasting_timestamp, tz_in_location)
         data.timestamp = data.timestamp.astype(int)
         data.timestamp = _pandas_ts_to_dt(data.timestamp, tz_in_location)

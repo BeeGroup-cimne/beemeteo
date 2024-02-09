@@ -43,8 +43,10 @@ class MeteoGalicia(Source):
 
     def _parse_forecasting_output(self, data, tz_in_location, **kwargs):
         data = super()._parse_forecasting_output(data, tz_in_location, **kwargs)
+        if data.empty:
+            return data
         if kwargs['forecasting_days'] == 0:
-            return data.groupby(["latitude", "longitude","timestamp"]).last()
+            return data.groupby(["latitude", "longitude", "timestamp"]).last()
 
     def _collect_raster(self, min_lat, max_lat, min_lon, max_lon, day):
         # latitude = format((min_lat + max_lat)/2, '.3f')
