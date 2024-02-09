@@ -18,6 +18,7 @@ logger.setLevel(level=logging.DEBUG)
 class Source:
     hbase_table_historical = None
     hbase_table_forecasting = None
+    hbase_table_grid = None
 
     def __init__(self, config):
         self.config = read_config(config)
@@ -75,6 +76,13 @@ class Source:
         """
         pass
 
+    @abstractmethod
+    def _collect_raster(self, min_lat, max_lat, min_lon, max_lon, day):
+        """
+        Collects raster
+        """
+        pass
+
     def collect_forecasting(self, latitude, longitude):
         """
         Collects a forecasting point from the data_source and stores it in HBASE.
@@ -123,37 +131,10 @@ class Source:
         :param longitude: station's longitude
         """
         forecasted_data = self._collect_raster(min_lat, max_lat, min_lon, max_lon, day)
-        precision = 10
 
-        forecasted_data['latitude'] = (round(forecasted_data['latitude']*precision)).astype(int)/precision
-        forecasted_data['longitude'] = (round(forecasted_data['longitude']*precision)).astype(int)/precision
-
-        dfs = {}
-
-        for i in range(0, len(forecasted_data), 96):
-            chunk = forecasted_data.iloc[i:i+96].reset_index(drop=True)
-            lat = chunk.iloc[0]['latitude']
-            lon = chunk.iloc[0]['longitude']
-            if (lat, lon) not in dfs:
-                dfs[(lat, lon)] = [chunk]
-            else:
-                dfs[(lat, lon)].append(chunk)
-
-        cols_mean = ['totalPrecipitation', 'relativeHumidity', 'GHI', 'airTemperature','timestamp', 'latitude', 'longitude','forecasting_timestamp']
-        cols_sum = ['u', 'v']
-
-        for lat_lon in dfs.keys():
-            df = pd.concat(dfs[lat_lon],axis=1)
-            mean_df = df[cols_mean].T.groupby(level=0).mean().T
-            sum_df = df[cols_sum].T.groupby(level=0).sum().T
-
-            result_df = pd.concat([mean_df, sum_df], axis=1)
-            result_df['forecasting_timestamp'] = result_df['forecasting_timestamp'].astype(int)
-            result_df['timestamp'] = result_df['timestamp'].astype(int)
-
-            save_to_hbase(result_df.to_dict(orient="records"), self.hbase_table_forecasting,
-                          self.config['hbase_weather_data'], [("info", "all")],
-                          row_fields=["latitude", "longitude", "timestamp", "forecasting_timestamp"])
+        save_to_hbase(forecasted_data.to_dict(orient="records"), self.hbase_table_grid,
+                      self.config['hbase_weather_data'], [("info", "all")],
+                      row_fields=["latitude", "longitude", "timestamp", "forecasting_timestamp"])
 
 
     def get_forecasting_data(self, latitude, longitude, date_from, date_to, **kwargs):
@@ -167,8 +148,11 @@ class Source:
         tz_find = TimezoneFinder()
         tz_in_location = pytz.timezone(tz_find.timezone_at(lat=float(latitude), lng=float(longitude)))
         args = self._prepare_forecasting_input(latitude, longitude, date_from, date_to, tz_in_location, **kwargs)
+        if kwargs.get("grid") is not None:
+            data = self._get_from_hbase(*args, self.hbase_table_grid)
+        else:
+            data = self._get_from_hbase(*args, self.hbase_table_forecasting)
 
-        data = self._get_from_hbase(*args, self.hbase_table_forecasting)
         return self._parse_forecasting_output(data, tz_in_location, **kwargs)
 
     def get_historical_data(self, latitude, longitude, date_from, date_to):
