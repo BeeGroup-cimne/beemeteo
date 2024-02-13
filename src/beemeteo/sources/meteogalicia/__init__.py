@@ -50,14 +50,8 @@ class MeteoGalicia(Source):
             return data.groupby(["latitude", "longitude", "timestamp"]).last()
 
     def _collect_raster(self, min_lat, max_lat, min_lon, max_lon, day):
-        # latitude = format((min_lat + max_lat)/2, '.3f')
-        # longitude = format((min_lon + max_lat)/2, '.3f')
-
-        # now_timestamp = int(now.astimezone(pytz.UTC).timestamp())
         forecasted_data = self._get_historic_forecasting_raster(min_lat, max_lat, min_lon, max_lon, day)
         forecasted_data = forecasted_data.drop(columns=["Lambert_Conformal", "windSpeed", "windDirection"])
-        # forecasted_data['latitude'] = (round(forecasted_data['latitude']*precision)).astype(int)/precision
-        # forecasted_data['longitude'] = (round(forecasted_data['longitude']*precision)).astype(int)/precision
 
         forecasted_data['timestamp'] = forecasted_data['timestamp'].astype("datetime64[s]").astype(int)
         forecasted_data['forecasting_timestamp'] = forecasted_data['forecasting_timestamp'].astype(
@@ -65,36 +59,21 @@ class MeteoGalicia(Source):
 
         precision = 10
 
-        forecasted_data['latitude'] = (round(forecasted_data['latitude'] * precision)).astype(int) / precision
-        forecasted_data['longitude'] = (round(forecasted_data['longitude'] * precision)).astype(int) / precision
+        forecasted_data['latitude'] = (round(forecasted_data['latitude'] * precision) / precision).astype(str)
+        forecasted_data['longitude'] = (round(forecasted_data['longitude'] * precision) / precision).astype(str)
 
-        dfs = {}
+        forecasted_data['latitude'] = forecasted_data['latitude'].replace('-0.0', '0.0')
+        forecasted_data['longitude'] = forecasted_data['longitude'].replace('-0.0', '0.0')
 
-        for i in range(0, len(forecasted_data), 96):
-            chunk = forecasted_data.iloc[i:i + 96].reset_index(drop=True)
-            lat = chunk.iloc[0]['latitude']
-            lon = chunk.iloc[0]['longitude']
-            if (lat, lon) not in dfs:
-                dfs[(lat, lon)] = [chunk]
-            else:
-                dfs[(lat, lon)].append(chunk)
+        cols_mean = ['totalPrecipitation', 'relativeHumidity', 'GHI', 'airTemperature', 'u', 'v']
 
-        cols_mean = ['totalPrecipitation', 'relativeHumidity', 'GHI', 'airTemperature', 'timestamp', 'latitude',
-                     'longitude', 'forecasting_timestamp']
-        cols_sum = ['u', 'v']
+        agg_dict = {k: 'mean' for k in cols_mean}
 
-        df_final = pd.DataFrame()
+        forecasted_data2 = (forecasted_data.groupby(['forecasting_timestamp', 'timestamp', "latitude", "longitude"])
+                            .agg(agg_dict))
+        forecasted_data2.reset_index(inplace=True)
 
-        for lat_lon in dfs.keys():
-            df = pd.concat(dfs[lat_lon], axis=1)
-            mean_df = df[cols_mean].T.groupby(level=0).mean().T
-            sum_df = df[cols_sum].T.groupby(level=0).sum().T
-
-            result_df = pd.concat([mean_df, sum_df], axis=1)
-            result_df['forecasting_timestamp'] = result_df['forecasting_timestamp'].astype(int)
-            result_df['timestamp'] = result_df['timestamp'].astype(int)
-            df_final = pd.concat([df_final, result_df])
-        return df_final
+        return forecasted_data2
 
     def _get_historical_data_source(self, latitude, longitude, gaps, local_tz):
         missing_data = pd.DataFrame()
