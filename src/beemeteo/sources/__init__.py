@@ -112,7 +112,7 @@ class Source:
         if not data.empty:
             print("This forecast was already in the database")
             return False
-        else: 
+        else:
             forecasted_data = self._collect_forecasting(latitude, longitude, now, tz_in_location)
             forecasted_data = forecasted_data.query("timestamp >= {}".format(now.astimezone(pytz.UTC).timestamp())).\
                 sort_values(by=["forecasting_timestamp", "timestamp"])
@@ -250,4 +250,5 @@ class Source:
                     measures.append(new_data)
             return pd.DataFrame(measures)
         except Exception as e:
+            print(e)
             return pd.DataFrame({})
