@@ -9,14 +9,15 @@ import requests
 
 from beemeteo.sources import Source, logger
 from beemeteo.utils import _pandas_dt_to_ts_utc, _pandas_to_tz, _datetime_to_tz, _datetime_dt_to_ts_utc
+from beemeteo.sources.era5.utils import query_from_grib
 
-class MeteoGalicia(Source):
-    hbase_table_historical = "meteo_galicia_historical"
-    hbase_table_forecasting = "meteo_galicia_forecasting"
-    hbase_table_grid = "meteo_galicia_grid"
+class ERA5(Source):
+    hbase_table_historical = "era5_historical"
+    hbase_table_forecasting = "era5_forecasting"
+    hbase_table_grid = "era5_grid"
 
     def __init__(self, config):
-        super(MeteoGalicia, self).__init__(config)
+        super(ERA5, self).__init__(config)
 
     def _collect_forecasting(self, latitude, longitude, now, local_tz):
         now_timestamp = int(now.astimezone(pytz.UTC).timestamp())
@@ -29,7 +30,7 @@ class MeteoGalicia(Source):
         return forecasted_data
 
     def _prepare_forecasting_input(self, latitude, longitude, date_from, date_to, tz_in_location, **kwargs):
-        key_mapping = {"latitude": 0, "longitude": 1, "timestamp": 2, "forecasting_timestamp": 3}
+        key_mapping = {"latitude": 0, "longitude": 1, "timestamp": 2}
 
         latitude = format(latitude, '.1f')
         longitude = format(longitude, '.1f')
@@ -44,34 +45,25 @@ class MeteoGalicia(Source):
 
     def _parse_forecasting_output(self, data, tz_in_location, **kwargs):
         data = super()._parse_forecasting_output(data, tz_in_location, **kwargs)
-        return data
+        if data.empty:
+            return data
+        if kwargs['forecasting_days'] == 0:
+            return data.groupby(["latitude", "longitude", "timestamp"]).last()
 
+    def _collect_raster2(self, min_lat, max_lat, min_lon, max_lon, name, **kwargs):
+        # data_query = f'{max_lat}_{min_lon}_{min_lat}_{max_lon}'
+        # raster = query_from_grib(data_dir=kwargs['folder'], grib_contains = data_query)
 
-    def _collect_raster(self, min_lat, max_lat, min_lon, max_lon, day):
-        forecasted_data = self._get_historic_forecasting_raster(min_lat, max_lat, min_lon, max_lon, day)
-        forecasted_data = forecasted_data.drop(columns=["Lambert_Conformal", "windSpeed", "windDirection"])
+        raster = pd.read_csv(name)
+        raster.rename({"time": "timestamp"}, axis=1, inplace=True)
+        raster['timestamp'] = raster['timestamp'].astype("datetime64[s, UTC]")
+        raster['timestamp'] = raster['timestamp'].astype(int)
 
-        forecasted_data['timestamp'] = forecasted_data['timestamp'].astype("datetime64[s]").astype(int)
-        forecasted_data['forecasting_timestamp'] = forecasted_data['forecasting_timestamp'].astype(
-            "datetime64[s]").astype(int)
+        raster['latitude'] = round(raster['latitude'], 1).astype(str)
+        raster['longitude'] = round(raster['longitude'], 1).astype(str)
 
-        precision = 10
-
-        forecasted_data['latitude'] = (round(forecasted_data['latitude'] * precision) / precision).astype(str)
-        forecasted_data['longitude'] = (round(forecasted_data['longitude'] * precision) / precision).astype(str)
-
-        forecasted_data['latitude'] = forecasted_data['latitude'].replace('-0.0', '0.0')
-        forecasted_data['longitude'] = forecasted_data['longitude'].replace('-0.0', '0.0')
-
-        cols_mean = ['totalPrecipitation', 'relativeHumidity', 'GHI', 'airTemperature', 'u', 'v']
-
-        agg_dict = {k: 'mean' for k in cols_mean}
-
-        forecasted_data2 = (forecasted_data.groupby(['forecasting_timestamp', 'timestamp', "latitude", "longitude"])
-                            .agg(agg_dict))
-        forecasted_data2.reset_index(inplace=True)
-
-        return forecasted_data2
+        # raster.to_csv('cat.csv', index=False)
+        return raster
 
     def _get_historical_data_source(self, latitude, longitude, gaps, local_tz):
         missing_data = pd.DataFrame()
