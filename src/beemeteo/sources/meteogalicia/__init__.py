@@ -46,14 +46,13 @@ class MeteoGalicia(Source):
         data = super()._parse_forecasting_output(data, tz_in_location, **kwargs)
         return data
 
-
     def _collect_raster(self, min_lat, max_lat, min_lon, max_lon, day):
         forecasted_data = self._get_historic_forecasting_raster(min_lat, max_lat, min_lon, max_lon, day)
         forecasted_data = forecasted_data.drop(columns=["Lambert_Conformal", "windSpeed", "windDirection"])
 
-        forecasted_data['timestamp'] = forecasted_data['timestamp'].astype("datetime64[s]").astype(int)
-        forecasted_data['forecasting_timestamp'] = forecasted_data['forecasting_timestamp'].astype(
-            "datetime64[s]").astype(int)
+        forecasted_data['timestamp'] = forecasted_data['timestamp'].values.astype('datetime64[s]').astype(int)
+        forecasted_data['forecasting_timestamp'] = (forecasted_data['forecasting_timestamp']
+                                                    .values.astype('datetime64[s]').astype(int))
 
         precision = 10
 
