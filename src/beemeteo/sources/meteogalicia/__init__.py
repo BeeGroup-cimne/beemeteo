@@ -253,13 +253,20 @@ class MeteoGalicia(Source):
 
         try:
             url_mg = (
-                "http://mandeo.meteogalicia.es/"
+                "https://mandeo.meteogalicia.es/"
                 "thredds/"
                 "ncss/"
                 "modelos/"
                 "WRF_ARW_1KM_HIST_Novo/"
                 "%s/"
                 "wrf_arw_det_history_d01_%s_0000.nc4?"
+                "var=cfh&"
+                "var=cfl&"
+                "var=cfm&"
+                "var=mslp&"
+                "var=visibility&"
+                "var=u&"
+                "var=v&"
                 "var=lat&"
                 "var=lon&"
                 "var=dir&"
@@ -272,8 +279,6 @@ class MeteoGalicia(Source):
                 "west=%s&"
                 "east=%s&"
                 "south=%s&"
-                "var=u&"
-                "var=v&"
                 "disableProjSubset=on&"
                 "horizStride=1&"
                 "time_start=%s&"
@@ -302,6 +307,10 @@ class MeteoGalicia(Source):
 
             names = {
                 "dir": "windSpeed",
+                "mslp": "atmosphericPressure",
+                "cfh": "cloudCloverHighLevels",
+                "cfl": "cloudCloverLowLevels",
+                "cfm": "cloudCloverMidLevels",
                 "mod": "windDirection",
                 "prec": "totalPrecipitation",
                 "rh": "relativeHumidity",
