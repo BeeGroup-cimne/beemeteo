@@ -62,7 +62,8 @@ class MeteoGalicia(Source):
         forecasted_data['latitude'] = forecasted_data['latitude'].replace('-0.0', '0.0')
         forecasted_data['longitude'] = forecasted_data['longitude'].replace('-0.0', '0.0')
 
-        cols_mean = ['totalPrecipitation', 'relativeHumidity', 'GHI', 'airTemperature', 'u', 'v']
+        cols_mean = ['totalPrecipitation', 'relativeHumidity', 'GHI', 'airTemperature', 'atmosphericPressure',
+                     'cloudCloverHighLevels', 'cloudCloverMidLevels', 'cloudCloverLowLevels', 'visibility', 'u', 'v']
 
         agg_dict = {k: 'mean' for k in cols_mean}
 
@@ -302,7 +303,7 @@ class MeteoGalicia(Source):
             with open("temp.nc4", "wb") as temp_file:
                 temp_file.write(r.content)
 
-            nc_data = xr.open_dataset('temp.nc4')
+            nc_data = xr.open_dataset('temp.nc4', engine="netcdf4")
             df = nc_data.to_dataframe()
 
             names = {
