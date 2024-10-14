@@ -63,7 +63,7 @@ class MeteoGalicia(Source):
         forecasted_data['longitude'] = forecasted_data['longitude'].replace('-0.0', '0.0')
 
         cols_mean = ['totalPrecipitation', 'relativeHumidity', 'GHI', 'airTemperature', 'atmosphericPressure',
-                     'cloudCloverHighLevels', 'cloudCloverMidLevels', 'cloudCloverLowLevels', 'visibility', 'u', 'v']
+                     'cloudCoverHighLevels', 'cloudCoverMidLevels', 'cloudCoverLowLevels', 'visibility', 'u', 'v']
 
         agg_dict = {k: 'mean' for k in cols_mean}
 
