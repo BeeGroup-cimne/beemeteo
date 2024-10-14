@@ -240,3 +240,10 @@ source.collect_raster2(
     ini=3
 )
 ```
+
+## Authors
+- Jose Manuel Broto - jmbroto@cimne.upc.edu
+- Eloi Gabaldón - egabaldon@cimne.upc.edu
+- Arian Huapaya - ahuapaya@cimne.upc.edu
+  
+Copyright (c) 2024 Jose Manuel Broto, Eloi Gabaldón, Arian Huapaya
