@@ -309,9 +309,9 @@ class MeteoGalicia(Source):
             names = {
                 "dir": "windSpeed",
                 "mslp": "atmosphericPressure",
-                "cfh": "cloudCloverHighLevels",
-                "cfl": "cloudCloverLowLevels",
-                "cfm": "cloudCloverMidLevels",
+                "cfh": "cloudCoverHighLevels",
+                "cfl": "cloudCoverLowLevels",
+                "cfm": "cloudCoverMidLevels",
                 "mod": "windDirection",
                 "prec": "totalPrecipitation",
                 "rh": "relativeHumidity",
