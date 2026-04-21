@@ -254,11 +254,11 @@ class MeteoGalicia(Source):
 
         try:
             url_mg = (
-                "https://mandeo.meteogalicia.es/"
+                "https://thredds.meteogalicia.gal/"
                 "thredds/"
-                "ncss/"
+                "fileServer/"
                 "modelos/"
-                "WRF_ARW_1KM_HIST_Novo/"
+                "WRF_ARW_1KM_HIST/"
                 "%s/"
                 "wrf_arw_det_history_d01_%s_0000.nc4?"
                 "var=cfh&"
