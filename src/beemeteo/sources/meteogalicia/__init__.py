@@ -256,7 +256,8 @@ class MeteoGalicia(Source):
             url_mg = (
                 "https://thredds.meteogalicia.gal/"
                 "thredds/"
-                "fileServer/"
+                "ncss/"
+                "grid/"
                 "modelos/"
                 "WRF_ARW_1KM_HIST/"
                 "%s/"
